@@ -223,7 +223,7 @@ async function main() {
 
     const listenPort = process.env.REST_PORT==null ? 4000 : parseInt(process.env.REST_PORT);
 
-    const server = http2.createSecureServer(
+    let server = http2.createSecureServer(
         {
             key: await fs.readFile(process.env.SSL_KEY),
             cert: await fs.readFile(process.env.SSL_CERT),
@@ -234,7 +234,32 @@ async function main() {
 
     await new Promise<void>(resolve => server.listen(listenPort, () => resolve()));
 
-    console.log("[Main]: Rest server listening on port: ", listenPort)
+    console.log("[Main]: Rest server listening on port: ", listenPort);
+
+    setInterval(async () => {
+        await new Promise<void>((resolve,reject) => {
+            server.close((err) => {
+                if(err) {
+                    reject(err);
+                    return;
+                }
+                resolve();
+            })
+        }).catch(e => console.error(e));
+        console.log("[Main]: Rest server closed due to scheduled restart and reload of SSL certificates");
+
+        server = http2.createSecureServer(
+            {
+                key: await fs.readFile(process.env.SSL_KEY),
+                cert: await fs.readFile(process.env.SSL_CERT),
+                allowHTTP1: true
+            },
+            restServer
+        );
+        await new Promise<void>(resolve => server.listen(listenPort, () => resolve()));
+
+        console.log("[Main]: Rest server restarted & listening on port: ", listenPort);
+    }, 24*60*60*1000);
 
 }
 
