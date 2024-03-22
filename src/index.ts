@@ -245,7 +245,7 @@ async function main() {
                 }
                 resolve();
             })
-        }).catch(e => console.error(e));
+        }).catch(e => console.log(e));
         console.log("[Main]: Rest server closed due to scheduled restart and reload of SSL certificates");
 
         server = http2.createSecureServer(
@@ -256,7 +256,25 @@ async function main() {
             },
             restServer
         );
-        await new Promise<void>(resolve => server.listen(listenPort, () => resolve()));
+
+        let running = false;
+        while(!running) {
+            running = await new Promise<void>((resolve, reject) => {
+                let errorCallback = (e) => {
+                    reject(e);
+                };
+                server.on("error", errorCallback);
+                server.listen(listenPort, () => {
+                    server.off("error", errorCallback);
+                    resolve();
+                });
+            }).then(() => true).catch(e => {
+                console.log("[Main]: Rest server restat ERROR, cannot start listening! Retry in 15 seconds.");
+                console.log(e);
+                return false;
+            });
+            if(!running) await new Promise<void>(resolve => setTimeout(() => resolve(), 15000));
+        }
 
         console.log("[Main]: Rest server restarted & listening on port: ", listenPort);
     }, 24*60*60*1000);
